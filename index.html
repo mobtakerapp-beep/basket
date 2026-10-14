@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="w-full h-full m-0 p-0 overflow-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>استراتيجية السلة - Interactive Basket Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            font-family: 'Cairo', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            overflow: hidden;
+            background: linear-gradient(135deg, #fbcfe8 0%, #fed7aa 50%, #bae6fd 100%);
+            margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh;
+        }
+        body { display: flex; flex-direction: column; justify-content: space-between; }
+        header, footer { flex-shrink: 0; width: 100%; }
+        main { position: relative; flex: 1 1 0%; min-height: 0; min-width: 0; width: 100%; overflow: hidden; }
+        #gameCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+        @media (max-width: 640px) {
+            header { padding: 8px 12px !important; }
+            header h1 { font-size: 15px !important; }
+            header p { font-size: 11px !important; }
+            header button { padding: 6px 10px !important; font-size: 11px !important; }
+            footer { padding: 8px 12px !important; gap: 6px !important; }
+            footer button { padding: 12px !important; font-size: 18px !important; font-weight: 900 !important; }
+            #currentQuestionBanner { font-size: 14px !important; padding: 8px 12px !important; white-space: normal !important; text-align: center !important; line-height: 1.3 !important; }
+            main > div.absolute.top-3 { top: 8px !important; width: 95% !important; }
+            #serialModal, #adminModal { padding: 16px !important; }
+        }
+        .bouncing { animation: bounce 2s infinite; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    </style>
+</head>
+<body class="w-full h-full m-0 p-0 flex flex-col justify-between items-center overflow-hidden bg-gradient-to-br from-pink-100 via-orange-100 to-sky-100">
+
+    <div id="serialModal" class="fixed inset-0 bg-white/98 backdrop-blur-md flex flex-col items-center justify-center p-4 z-50 w-screen h-screen">
+        <div class="bg-white p-6 sm:p-10 rounded-3xl shadow-2xl border-4 border-pink-400 w-full max-w-2xl max-h-[94vh] overflow-y-auto flex flex-col justify-center items-center text-center bouncing">
+            <div class="text-6xl sm:text-7xl mb-3">🔐</div>
+            <h2 class="text-2xl sm:text-3xl font-black text-pink-600 mb-2">استراتيجية السلة</h2>
+            <p class="text-sm sm:text-base text-gray-500 font-bold mb-6 max-w-md">الرجاء إدخال سريال التفعيل الخاص بك:</p>
+            <input type="password" id="serialInput" class="w-full max-w-md px-5 py-4 border-2 border-pink-300 rounded-2xl text-center font-black text-xl focus:outline-none focus:border-pink-500 mb-4 bg-pink-50/50 shadow-inner" placeholder="أدخل السريال هنا...">
+            <div id="serialError" class="text-sm font-bold text-red-500 mb-4 hidden">❌ السريال غير صحيح أو تم استخدامه من قبل!</div>
+            <button onclick="checkSerial()" class="w-full max-w-md py-4 bg-gradient-to-r from-pink-500 to-purple-500 text-white font-black text-lg rounded-2xl shadow-lg transform active:scale-95 transition hover:brightness-110 border-b-4 border-pink-700">
+                تفعيل الدخول ✨
+            </button>
+            <div class="mt-6 text-xs text-gray-400 font-bold">تصميم: مروة أبو بكر</div>
+        </div>
+    </div>
+
+    <div id="adminModal" class="fixed inset-0 bg-white/98 backdrop-blur-md flex flex-col items-center justify-center p-4 z-50 hidden w-screen h-screen">
+        <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl border-4 border-purple-500 w-full max-w-4xl max-h-[94vh] overflow-y-auto flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl sm:text-2xl font-black text-purple-700">👑 لوحة تحكم الأدمن (مروة أبو بكر)</h3>
+                    <button onclick="closeAdminPanel()" class="text-gray-400 hover:text-gray-700 font-bold text-2xl px-2">✕</button>
+                </div>
+                <div class="bg-purple-50 p-4 sm:p-5 rounded-2xl border-2 border-purple-200 mb-4">
+                    <button onclick="generateClientSerial()" class="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow transition text-base mb-3">✨ توليد سريال جديد للعميل</button>
+                    <div class="text-xs font-bold text-gray-500 mb-1">السريال المولّد:</div>
+                    <div class="flex gap-2">
+                        <input type="text" id="generatedSerialOutput" readonly class="flex-1 px-4 py-3 border-2 border-purple-200 rounded-xl text-sm font-black bg-white text-center text-purple-700 select-all" placeholder="انقر فوق زر التوليد...">
+                        <button onclick="copyGeneratedSerial()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl text-sm font-black shadow transition whitespace-nowrap">📋 نسخ</button>
+                    </div>
+                </div>
+                <div id="serialsListContainer" class="space-y-1.5 max-h-48 overflow-y-auto bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs sm:text-sm font-bold text-gray-700 mb-4"></div>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button onclick="enterGameAsAdmin()" class="flex-1 py-3.5 bg-gradient-to-r from-pink-500 to-purple-500 text-white font-black text-base rounded-2xl shadow-lg transform active:scale-95 transition hover:brightness-110 border-b-4 border-purple-700">الدخول للعبة 🚀</button>
+                <button onclick="logoutSession()" class="px-5 py-3.5 bg-red-100 hover:bg-red-200 text-red-700 font-black text-sm rounded-2xl border-2 border-red-300 transition">🚪 تسجيل الخروج</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="w-full bg-white/95 backdrop-blur-md px-4 sm:px-6 py-3 flex justify-between items-center z-10 border-b-4 border-pink-300 shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-3xl sm:text-4xl">🧺</span>
+            <div>
+                <h1 class="text-base sm:text-xl font-black text-pink-600 leading-tight">استراتيجية السلة</h1>
+                <p class="text-[11px] sm:text-xs text-gray-500 font-bold">اكتشف واجمع الإجابات في السلة!</p>
+            </div>
+        </div>
+        <div class="flex gap-2 sm:gap-3 items-center">
+            <button id="adminReturnBtn" onclick="openAdminPanel()" class="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3.5 py-2 rounded-full border-2 border-amber-300 font-black text-xs sm:text-sm transition shadow hidden">👑 لوحة الأدمن</button>
+            <button onclick="logoutSession()" class="bg-red-100 hover:bg-red-200 text-red-700 px-3.5 py-2 rounded-full border-2 border-red-300 font-black text-xs sm:text-sm transition shadow">🚪 خروج</button>
+            <button onclick="openSettings()" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3.5 py-2 rounded-full border-2 border-purple-300 font-black text-xs sm:text-sm transition shadow">⚙️ إعداد</button>
+            <div class="bg-pink-100 px-4 py-2 rounded-full border-2 border-pink-400 text-pink-800 font-black text-xs sm:text-sm shadow-inner">النقاط: <span id="scoreVal">0</span></div>
+        </div>
+    </header>
+
+    <main class="relative w-full flex-1 bg-white/40 backdrop-blur-sm overflow-hidden cursor-pointer flex flex-col">
+        <div class="absolute top-3 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-1.5 z-10 w-11/12 max-w-2xl">
+            <div class="flex items-center gap-2 w-full">
+                <div id="currentQuestionBanner" class="bg-white/95 px-4 py-2 rounded-2xl shadow-md border-2 border-pink-400 text-pink-700 font-black text-xs sm:text-sm text-center flex-1 whitespace-normal leading-snug">السؤال يظهر هنا...</div>
+                <button onclick="nextQuestion()" class="bg-gradient-to-r from-purple-500 to-pink-500 hover:brightness-110 text-white font-black px-3.5 py-2 rounded-2xl shadow-md text-xs sm:text-sm border-2 border-white transition flex items-center gap-1 whitespace-nowrap">التالي ➡️</button>
+            </div>
+            <div class="w-full bg-white/80 rounded-full h-2.5 overflow-hidden border border-pink-300 shadow-inner flex justify-between items-center px-1">
+                <div id="timerBar" class="bg-gradient-to-r from-pink-500 to-purple-500 h-1.5 rounded-full w-full transition-all duration-1000"></div>
+                <span id="timerVal" class="text-[10px] font-black text-pink-600 mr-1.5">30ث</span>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" class="w-full h-full block flex-1"></canvas>
+        
+        <div id="overlay" class="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 z-20 transition-all duration-300">
+            <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl border-4 border-pink-400 max-w-sm sm:max-w-md w-full bouncing">
+                <div id="overlayIcon" class="text-6xl mb-2">🎈</div>
+                <h2 id="overlayTitle" class="text-xl sm:text-2xl font-black text-pink-600 mb-2">استعد للعب بالسلة!</h2>
+                <p id="overlayDesc" class="text-xs sm:text-sm text-gray-600 mb-5 font-bold">اجمع العناصر الصحيحة في السلة خلال 30 ثانية!</p>
+                <button id="actionBtn" onclick="startGame()" class="w-full py-3.5 bg-gradient-to-r from-pink-500 to-purple-500 text-white font-black text-base sm:text-lg rounded-2xl shadow-lg transform active:scale-95 transition hover:brightness-110 border-b-4 border-pink-700">ابدأ اللعبة الآن! 🚀</button>
+            </div>
+        </div>
+
+        <div id="settingsModal" class="absolute inset-0 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-4 z-30 hidden">
+            <div class="bg-white p-6 rounded-3xl shadow-2xl border-4 border-purple-400 max-w-xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-lg sm:text-xl font-black text-purple-700">⚙️ إعداد الأسئلة والعناصر</h3>
+                    <button onclick="closeSettings()" class="text-gray-400 hover:text-gray-700 font-bold text-xl px-2">✕</button>
+                </div>
+                <div class="space-y-4 mb-4">
+                    <div class="bg-purple-50 p-3.5 rounded-2xl border-2 border-purple-200">
+                        <label class="block text-xs font-black text-purple-800 mb-1">إضافة سؤال جديد:</label>
+                        <div class="flex gap-2 mb-2">
+                            <input type="text" id="newQuestionInput" class="flex-1 px-3 py-2 border-2 border-purple-200 rounded-xl text-sm font-bold bg-white" placeholder="اكتب السؤال هنا...">
+                            <button onclick="addQuestionToList()" class="bg-purple-600 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow transition whitespace-nowrap">+ سؤال</button>
+                        </div>
+                        <div id="questionsContainer" class="space-y-1 max-h-24 overflow-y-auto bg-white p-2 rounded-xl border border-purple-100 text-xs font-bold text-purple-900"></div>
+                    </div>
+                    <div class="bg-emerald-50 p-3.5 rounded-2xl border-2 border-emerald-200">
+                        <label class="block text-xs font-black text-emerald-800 mb-1">إضافة عنصر (رمز أو رابط صورة):</label>
+                        <div class="flex gap-2 mb-2">
+                            <input type="text" id="newItemInput" class="flex-1 px-3 py-2 border-2 border-emerald-200 rounded-xl text-sm font-bold bg-white" placeholder="رمز أو رابط...">
+                            <select id="itemTypeSelect" class="px-2 py-2 border-2 border-emerald-200 rounded-xl text-xs font-black bg-white">
+                                <option value="correct">صحيح (⭐)</option>
+                                <option value="incorrect">خاطئ (❌)</option>
+                            </select>
+                            <button onclick="addItemToList()" class="bg-emerald-600 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow transition whitespace-nowrap">+ عنصر</button>
+                        </div>
+                        <div id="itemsContainer" class="flex flex-wrap gap-1 max-h-28 overflow-y-auto bg-white p-2 rounded-xl border border-emerald-100 text-xs font-bold text-emerald-900"></div>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="saveSettings()" class="flex-1 py-3 bg-purple-600 text-white font-black rounded-xl shadow transition text-sm">حفظ وبدء اللعبة ✨</button>
+                    <button onclick="closeSettings()" class="px-4 py-3 bg-gray-200 text-gray-700 font-black rounded-xl transition text-sm">إلغاء</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="w-full bg-white/95 px-4 py-2 flex flex-col gap-2 z-10 border-t-4 border-pink-300 shrink-0">
+        <div class="flex justify-between gap-4 max-w-xl mx-auto w-full">
+            <button id="leftBtn" class="flex-1 bg-white active:bg-pink-300 text-pink-700 py-3.5 rounded-2xl shadow-lg border-b-4 border-pink-300 font-black text-lg sm:text-xl flex justify-center items-center transition">◀️ يسار</button>
+            <button id="rightBtn" class="flex-1 bg-white active:bg-pink-300 text-pink-700 py-3.5 rounded-2xl shadow-lg border-b-4 border-pink-300 font-black text-lg sm:text-xl flex justify-center items-center transition">يمين ▶️</button>
+        </div>
+        <div class="text-center">
+            <span class="text-xs sm:text-sm font-black text-purple-700 bg-pink-50 px-4 py-1 rounded-full shadow-sm border border-pink-200 inline-block">✨ تصميم: مروة أبو بكر ✨</span>
+        </div>
+    </footer>
+
+    <script>
+        const MASTER_ADMIN_SERIAL = "MARWA-MASTER-2026";
+        let isAdminLoggedIn = false;
+        let activeClientSerials = JSON.parse(localStorage.getItem('marwa_client_serials') || '[]');
+
+        const serialModal = document.getElementById('serialModal');
+        const adminModal = document.getElementById('adminModal');
+        const adminReturnBtn = document.getElementById('adminReturnBtn');
+        const serialInput = document.getElementById('serialInput');
+        const serialError = document.getElementById('serialError');
+        const generatedSerialOutput = document.getElementById('generatedSerialOutput');
+        const serialsListContainer = document.getElementById('serialsListContainer');
+
+        function checkSerial() {
+            const enteredVal = serialInput.value.trim();
+            if (enteredVal === MASTER_ADMIN_SERIAL) {
+                isAdminLoggedIn = true;
+                adminReturnBtn.classList.remove('hidden');
+                serialModal.classList.add('hidden');
+                openAdminPanel();
+                playSound('C5', '4n');
+                return;
+            }
+            let clientSerialObj = activeClientSerials.find(s => s.code === enteredVal);
+            if (clientSerialObj) {
+                if (clientSerialObj.used) {
+                    serialError.textContent = "❌ هذا السريال تم استخدامه من قبل!";
+                    serialError.classList.remove('hidden');
+                } else {
+                    clientSerialObj.used = true;
+                    localStorage.setItem('marwa_client_serials', JSON.stringify(activeClientSerials));
+                    serialModal.classList.add('hidden');
+                }
+            } else {
+                serialError.textContent = "❌ السريال غير صحيح!";
+                serialError.classList.remove('hidden');
+            }
+        }
+
+        function logoutSession() {
+            gameRunning = false;
+            clearInterval(window.spawnInterval);
+            clearInterval(window.gameTimerInterval);
+            adminModal.classList.add('hidden');
+            serialInput.value = '';
+            serialError.classList.add('hidden');
+            serialModal.classList.remove('hidden');
+        }
+
+        function generateClientSerial() {
+            const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const newCode = `MARWA-CLIENT-${randomPart}`;
+            activeClientSerials.push({ code: newCode, used: false });
+            localStorage.setItem('marwa_client_serials', JSON.stringify(activeClientSerials));
+            generatedSerialOutput.value = newCode;
+            renderSerialsList();
+        }
+
+        function copyGeneratedSerial() {
+            if (generatedSerialOutput.value) {
+                generatedSerialOutput.select();
+                document.execCommand('copy');
+            }
+        }
+
+        function renderSerialsList() {
+            serialsListContainer.innerHTML = '';
+            activeClientSerials.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-white px-3 py-1.5 rounded-lg border border-gray-100 text-xs';
+                div.innerHTML = `<span>${idx + 1}. ${item.code}</span> <span class="${item.used ? 'text-red-500' : 'text-emerald-600'}">${item.used ? 'مستخدم' : 'متاح'}</span>`;
+                serialsListContainer.appendChild(div);
+            });
+        }
+
+        function openAdminPanel() { renderSerialsList(); adminModal.classList.remove('hidden'); }
+        function closeAdminPanel() { adminModal.classList.add('hidden'); }
+        function enterGameAsAdmin() { adminModal.classList.add('hidden'); }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreVal = document.getElementById('scoreVal');
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlayDesc = document.getElementById('overlayDesc');
+        const overlayIcon = document.getElementById('overlayIcon');
+        const actionBtn = document.getElementById('actionBtn');
+        const currentQuestionBanner = document.getElementById('currentQuestionBanner');
+        const settingsModal = document.getElementById('settingsModal');
+        const timerBar = document.getElementById('timerBar');
+        const timerVal = document.getElementById('timerVal');
+
+        let score = 0, gameRunning = false, animationFrameId, timeLeft = 30;
+        let questionList = ["ما هي العناصر الصحيحة والمفيدة التي نجمعها؟"];
+        let currentQIndex = 0;
+        let gameData = {
+            itemsPool: [
+                { text: "📿", type: "correct", isImg: false },
+                { text: "📖", type: "correct", isImg: false },
+                { text: "❌", type: "incorrect", isImg: false }
+            ]
+        };
+        let player = { x: 0, y: 0, width: 100, height: 60, speed: 12 };
+        let items = [], particles = [], caughtPopups = [], imageCache = {};
+
+        function getOrLoadImage(url) {
+            if (!imageCache[url]) {
+                const img = new Image();
+                img.src = url;
+                imageCache[url] = img;
+            }
+            return imageCache[url];
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            canvas.width = Math.max(1, Math.round(rect.width * dpr));
+            canvas.height = Math.max(1, Math.round(rect.height * dpr));
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            canvas._logicalWidth = rect.width;
+            canvas._logicalHeight = rect.height;
+            
+            player.width = Math.min(180, Math.max(120, Math.round(rect.width * 0.28)));
+            player.height = Math.round(player.width * 0.52);
+            player.y = Math.max(15, rect.height - player.height - 10);
+            if (!gameRunning) player.x = rect.width / 2 - player.width / 2;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const synth = new Tone.Synth().toDestination();
+        function playSound(note, duration = '8n') {
+            try { if (Tone.context.state !== 'running') Tone.start(); synth.triggerAttackRelease(note, duration); } catch (e) {}
+        }
+
+        let moveLeft = false, moveRight = false;
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+
+        leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft = true; });
+        leftBtn.addEventListener('touchend', () => moveLeft = false);
+        leftBtn.addEventListener('mousedown', () => moveLeft = true);
+        leftBtn.addEventListener('mouseup', () => moveLeft = false);
+
+        rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); moveRight = true; });
+        rightBtn.addEventListener('touchend', () => moveRight = false);
+        rightBtn.addEventListener('mousedown', () => moveRight = true);
+        rightBtn.addEventListener('mouseup', () => moveRight = false);
+
+        canvas.addEventListener('touchmove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            player.x = (e.touches[0].clientX - rect.left) - player.width / 2;
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameRunning) {
+                const rect = canvas.getBoundingClientRect();
+                player.x = (e.clientX - rect.left) - player.width / 2;
+            }
+        });
+
+        function nextQuestion() {
+            currentQIndex = (currentQIndex + 1) % questionList.length;
+            currentQuestionBanner.textContent = questionList[currentQIndex];
+            playSound('A5', '8n');
+        }
+
+        function renderSettingsLists() {
+            const qContainer = document.getElementById('questionsContainer');
+            qContainer.innerHTML = '';
+            questionList.forEach((q, idx) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-purple-100/60 px-2 py-1 rounded-lg';
+                div.innerHTML = `<span>${idx + 1}. ${q}</span> <button onclick="removeQuestion(${idx})" class="text-red-500 font-bold px-1">✕</button>`;
+                qContainer.appendChild(div);
+            });
+
+            const iContainer = document.getElementById('itemsContainer');
+            iContainer.innerHTML = '';
+            gameData.itemsPool.forEach((item, idx) => {
+                const badge = document.createElement('div');
+                const typeLabel = item.type === 'correct' ? '⭐ صحيح' : '❌ خاطئ';
+                badge.className = 'bg-gray-100 text-gray-800 border border-gray-300 px-2 py-1 rounded-lg flex items-center justify-between gap-2 w-full text-xs';
+                badge.innerHTML = `<span>${item.text} (${typeLabel})</span> <button onclick="removeItem(${idx})" class="text-red-500 font-bold">✕</button>`;
+                iContainer.appendChild(badge);
+            });
+        }
+
+        function addQuestionToList() {
+            const input = document.getElementById('newQuestionInput');
+            if (input.value.trim()) { questionList.push(input.value.trim()); input.value = ''; renderSettingsLists(); }
+        }
+        function removeQuestion(idx) { if (questionList.length > 1) { questionList.splice(idx, 1); renderSettingsLists(); } }
+
+        function addItemToList() {
+            const input = document.getElementById('newItemInput');
+            const typeSelect = document.getElementById('itemTypeSelect');
+            if (input.value.trim()) {
+                const val = input.value.trim();
+                const isImg = val.startsWith('http://') || val.startsWith('https://');
+                gameData.itemsPool.push({ text: val, type: typeSelect.value, isImg: isImg });
+                input.value = ''; renderSettingsLists();
+            }
+        }
+        function removeItem(idx) { if (gameData.itemsPool.length > 1) { gameData.itemsPool.splice(idx, 1); renderSettingsLists(); } }
+
+        function openSettings() { gameRunning = false; clearInterval(window.spawnInterval); clearInterval(window.gameTimerInterval); renderSettingsLists(); settingsModal.classList.remove('hidden'); }
+        function closeSettings() { settingsModal.classList.add('hidden'); }
+        function saveSettings() {
+            currentQIndex = 0;
+            currentQuestionBanner.textContent = questionList[currentQIndex] || "السؤال التفاعلي";
+            closeSettings();
+            startGame();
+        }
+
+        function spawnItem() {
+            if (!gameRunning || items.length >= 4) return;
+            let chosen = gameData.itemsPool[Math.floor(Math.random() * gameData.itemsPool.length)];
+            let screenW = canvas._logicalWidth || canvas.clientWidth;
+            let itemSize = Math.min(85, Math.max(65, Math.round(screenW * 0.16)));
+            let startX = 15 + Math.random() * (screenW - itemSize - 30);
+            items.push({
+                x: startX, baseX: startX, y: -itemSize - 10, size: itemSize,
+                speed: 1.8 + Math.random() * 1.6, wobblePhase: Math.random() * Math.PI * 2,
+                wobbleSpeed: 0.03, wobbleAmp: 10, text: chosen.text, type: chosen.type,
+                isImg: chosen.isImg, points: chosen.type === 'correct' ? 10 : -5,
+                hitState: null, hitTimer: 0
+            });
+        }
+
+        function createParticles(x, y, symbol) {
+            for (let i = 0; i < 6; i++) {
+                particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, alpha: 1, text: symbol });
+            }
+        }
+
+        function startGame() {
+            score = 0; items = []; particles = []; caughtPopups = [];
+            scoreVal.textContent = score; gameRunning = true; timeLeft = 30;
+            timerVal.textContent = timeLeft + "ث"; timerBar.style.width = "100%";
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            currentQuestionBanner.textContent = questionList[currentQIndex];
+
+            clearInterval(window.spawnInterval);
+            clearInterval(window.gameTimerInterval);
+            window.spawnInterval = setInterval(spawnItem, 850);
+            window.gameTimerInterval = setInterval(() => {
+                if (!gameRunning) return;
+                timeLeft--;
+                timerVal.textContent = timeLeft + "ث";
+                timerBar.style.width = `${(timeLeft / 30) * 100}%`;
+                if (timeLeft <= 0) {
+                    gameRunning = false;
+                    clearInterval(window.spawnInterval);
+                    clearInterval(window.gameTimerInterval);
+                    overlayIcon.textContent = '🏆';
+                    overlayTitle.textContent = 'انتهى الوقت!';
+                    overlayDesc.textContent = `رائع جداً! جمعت ${score} نقطة بنجاح! ✨`;
+                    actionBtn.textContent = 'لعب مرة أخرى 🚀';
+                    overlay.classList.remove('opacity-0', 'pointer-events-none');
+                }
+            }, 1000);
+
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            loop();
+        }
+
+        function loop() {
+            if (!gameRunning) return;
+            let logicalW = canvas._logicalWidth || canvas.clientWidth;
+            let logicalH = canvas._logicalHeight || canvas.clientHeight;
+            ctx.clearRect(0, 0, logicalW, logicalH);
+
+            if (moveLeft) player.x -= player.speed;
+            if (moveRight) player.x += player.speed;
+            if (player.x < 0) player.x = 0;
+            if (player.x > logicalW - player.width) player.x = logicalW - player.width;
+
+            // رسم السلة
+            ctx.save();
+            let bx = player.x, by = player.y, bw = player.width, bh = player.height, inset = bw * 0.10;
+            
+            ctx.beginPath();
+            ctx.moveTo(bx + inset, by + bh);
+            ctx.lineTo(bx + bw - inset, by + bh);
+            ctx.quadraticCurveTo(bx + bw, by + bh * 0.5, bx + bw, by + 14);
+            ctx.lineTo(bx, by + 14);
+            ctx.quadraticCurveTo(bx, by + bh * 0.5, bx + inset, by + bh);
+            ctx.closePath();
+            let grad = ctx.createLinearGradient(bx, by, bx, by + bh);
+            grad.addColorStop(0, '#f59e0b'); 
+            grad.addColorStop(0.5, '#d97706'); 
+            grad.addColorStop(1, '#92400e');
+            ctx.fillStyle = grad; ctx.fill();
+
+            // المقبض
+            ctx.beginPath();
+            ctx.arc(bx + bw / 2, by + 12, (bw / 2) - 10, Math.PI, 0);
+            ctx.strokeStyle = '#b45309';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(bx + bw / 2, by + 12, (bw / 2) - 10, Math.PI, 0);
+            ctx.strokeStyle = '#fef08a';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+
+            // العناصر المتساقطة
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                
+                let radius = item.size / 2;
+                let centerX = item.x + radius, centerY = item.y + radius;
+
+                let catchY = player.y + 12;
+                
+                // التحقق من الاصطدام بالسلة
+                if (!item.hitState && item.x < player.x + player.width - 10 && item.x + item.size > player.x + 10 && item.y + item.size >= catchY && item.y <= catchY + 30) {
+                    item.hitState = item.type; // تخزين حالته (صحيح أو خطأ) لتغيير لون الإطار
+                    item.hitTimer = 15; // عدد الإطارات للبقاء ملوّناً قبل الاختفاء
+                    
+                    score += item.points;
+                    if (score < 0) score = 0;
+                    scoreVal.textContent = score;
+
+                    if (item.type === 'correct') {
+                        createParticles(centerX, player.y, '⭐');
+                        createParticles(centerX, player.y, '✨');
+                        playSound('E5', '8n');
+                    } else {
+                        createParticles(centerX, player.y, '💧');
+                        playSound('G3', '8n');
+                    }
+                }
+
+                if (item.hitState) {
+                    item.hitTimer--;
+                    if (item.hitTimer <= 0) {
+                        items.splice(i, 1);
+                        continue;
+                    }
+                } else {
+                    item.y += item.speed;
+                    item.wobblePhase += item.wobbleSpeed;
+                    item.x = Math.max(6, Math.min(logicalW - item.size - 6, item.baseX + Math.sin(item.wobblePhase) * item.wobbleAmp));
+                }
+
+                ctx.save();
+                ctx.translate(centerX, centerY);
+
+                // تحديد لون الإطار: أبيض أثناء السقوط، أخضر لو صح أو أحمر لو خطا عند الاصطدام بالسلة
+                if (!item.hitState) {
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+                    ctx.shadowBlur = 8;
+                    ctx.strokeStyle = '#ffffff';
+                } else {
+                    if (item.hitState === 'correct') {
+                        ctx.shadowColor = 'rgba(34, 197, 94, 0.8)';
+                        ctx.shadowBlur = 14;
+                        ctx.strokeStyle = '#22c55e'; // أخضر
+                    } else {
+                        ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
+                        ctx.shadowBlur = 14;
+                        ctx.strokeStyle = '#ef4444'; // أحمر
+                    }
+                }
+
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+
+                ctx.lineWidth = 4.5;
+                ctx.stroke();
+
+                let emojiSize = Math.round(item.size * 0.58);
+                ctx.font = `${emojiSize}px sans-serif`;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#000000';
+                ctx.fillText(item.text, 0, 2);
+                ctx.restore();
+
+                if (item.y > logicalH + 20) items.splice(i, 1);
+            }
+
+            // رسم الجزيئات والنجوم المتطايرة
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.03;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.save();
+                    ctx.globalAlpha = p.alpha;
+                    ctx.font = '24px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(p.text, p.x, p.y);
+                    ctx.restore();
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(loop);
+        }
+        currentQuestionBanner.textContent = questionList[currentQIndex];
+    </script>
+</body>
+</html>
